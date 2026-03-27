@@ -23,6 +23,9 @@ export default function Page() {
   const [githubUrl, setGithubUrl] = useState('')
   const [linkedinUrl, setLinkedinUrl] = useState('')
   const [walletAddress, setWalletAddress] = useState('')
+  const [companyName, setCompanyName] = useState('')
+  const [position, setPosition] = useState('')
+  const [experience, setExperience] = useState('')
   const [role, setRole] = useState<'student' | 'mentor'>('student')
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -40,6 +43,16 @@ export default function Page() {
       return
     }
 
+    if (role === 'mentor') {
+      const freeEmailDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com', 'icloud.com']
+      const emailDomain = email.split('@')[1]
+      if (emailDomain && freeEmailDomains.includes(emailDomain.toLowerCase())) {
+        setError('Mentors must sign up with a verified work email address')
+        setIsLoading(false)
+        return
+      }
+    }
+
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -54,6 +67,9 @@ export default function Page() {
             github_url: githubUrl || null,
             linkedin_url: linkedinUrl || null,
             wallet_address: walletAddress || null,
+            company_name: companyName || null,
+            position: position || null,
+            experience: experience || null,
           },
         },
       })
@@ -109,11 +125,12 @@ export default function Page() {
                   {role === 'student' && (
                     <>
                       <div className="grid gap-2">
-                        <Label htmlFor="github">GitHub Profile URL (Optional)</Label>
+                        <Label htmlFor="github">GitHub Profile URL</Label>
                         <Input
                           id="github"
                           type="url"
                           placeholder="https://github.com/johndoe"
+                          required={role === 'student'}
                           value={githubUrl}
                           onChange={(e) => setGithubUrl(e.target.value)}
                         />
@@ -132,16 +149,51 @@ export default function Page() {
                   )}
 
                   {role === 'mentor' && (
-                    <div className="grid gap-2">
-                      <Label htmlFor="wallet">Polygon Wallet Address (Optional)</Label>
-                      <Input
-                        id="wallet"
-                        type="text"
-                        placeholder="0x..."
-                        value={walletAddress}
-                        onChange={(e) => setWalletAddress(e.target.value)}
-                      />
-                    </div>
+                    <>
+                      <div className="grid gap-2">
+                        <Label htmlFor="company">Company Name</Label>
+                        <Input
+                          id="company"
+                          type="text"
+                          placeholder="Acme Corp"
+                          required={role === 'mentor'}
+                          value={companyName}
+                          onChange={(e) => setCompanyName(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="position">Position / Designation</Label>
+                        <Input
+                          id="position"
+                          type="text"
+                          placeholder="Senior Software Engineer"
+                          required={role === 'mentor'}
+                          value={position}
+                          onChange={(e) => setPosition(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="experience">Years of Experience</Label>
+                        <Input
+                          id="experience"
+                          type="text"
+                          placeholder="e.g. 5+ years"
+                          required={role === 'mentor'}
+                          value={experience}
+                          onChange={(e) => setExperience(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="wallet">Polygon Wallet Address (Optional)</Label>
+                        <Input
+                          id="wallet"
+                          type="text"
+                          placeholder="0x..."
+                          value={walletAddress}
+                          onChange={(e) => setWalletAddress(e.target.value)}
+                        />
+                      </div>
+                    </>
                   )}
 
                   <div className="grid gap-2">

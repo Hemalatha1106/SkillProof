@@ -7,7 +7,8 @@ set search_path = public
 as $$
 begin
   insert into public.student_profiles (
-    id, email, full_name, role, github_url, linkedin_url, wallet_address
+    id, email, full_name, role, github_url, linkedin_url, wallet_address,
+    company_name, position, experience
   )
   values (
     new.id,
@@ -16,7 +17,10 @@ begin
     coalesce(new.raw_user_meta_data ->> 'role', 'student'),
     new.raw_user_meta_data ->> 'github_url',
     new.raw_user_meta_data ->> 'linkedin_url',
-    new.raw_user_meta_data ->> 'wallet_address'
+    new.raw_user_meta_data ->> 'wallet_address',
+    new.raw_user_meta_data ->> 'company_name',
+    new.raw_user_meta_data ->> 'position',
+    new.raw_user_meta_data ->> 'experience'
   )
   on conflict (id) do nothing;
 

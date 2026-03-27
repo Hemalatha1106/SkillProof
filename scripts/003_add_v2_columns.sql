@@ -7,7 +7,10 @@ add column if not exists linkedin_url text,
 add column if not exists wallet_address text,
 add column if not exists credibility_score integer default 0,
 add column if not exists reputation_score integer default 0,
-add column if not exists is_verified_mentor boolean default false;
+add column if not exists is_verified_mentor boolean default false,
+add column if not exists company_name text,
+add column if not exists position text,
+add column if not exists experience text;
 
 -- Add new columns to submissions
 alter table public.submissions

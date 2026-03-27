@@ -10,6 +10,9 @@ create table if not exists public.student_profiles (
   credibility_score integer default 0,
   reputation_score integer default 0,
   is_verified_mentor boolean default false,
+  company_name text,
+  position text,
+  experience text,
   created_at timestamp with time zone default timezone('utc'::text, now()),
   updated_at timestamp with time zone default timezone('utc'::text, now())
 );

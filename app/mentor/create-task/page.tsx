@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function CreateTask() {
   const router = useRouter()
@@ -19,6 +19,24 @@ export default function CreateTask() {
   const [difficultyLevel, setDifficultyLevel] = useState<'beginner' | 'intermediate' | 'advanced'>('beginner')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isPublic, setIsPublic] = useState(true)
+  const [rooms, setRooms] = useState<any[]>([])
+  const [selectedRoomId, setSelectedRoomId] = useState<string>('')
+
+  useEffect(() => {
+    async function fetchRooms() {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data } = await supabase
+          .from('mentorship_rooms')
+          .select('*')
+          .eq('mentor_id', user.id)
+        if (data) setRooms(data)
+      }
+    }
+    fetchRooms()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -33,6 +51,11 @@ export default function CreateTask() {
 
     try {
       const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) throw new Error('Not authenticated')
 
       const { error: createError } = await supabase
         .from('tasks')
@@ -41,6 +64,9 @@ export default function CreateTask() {
           description,
           category,
           difficulty_level: difficultyLevel,
+          creator_id: user.id,
+          is_public: isPublic,
+          room_id: selectedRoomId || null,
         })
 
       if (createError) throw createError
@@ -129,6 +155,59 @@ export default function CreateTask() {
                   </select>
                 </div>
               </div>
+
+              <div className="space-y-3 pt-4 border-t border-slate-100">
+                <Label className="text-base font-semibold">Task Visibility</Label>
+                <div className="flex gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPublic(true)
+                      setSelectedRoomId('')
+                    }}
+                    className={`flex-1 p-3 rounded-lg border-2 text-left transition-all ${
+                      isPublic 
+                        ? 'border-blue-600 bg-blue-50 text-blue-900' 
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    <p className="font-bold text-sm">Global Task</p>
+                    <p className="text-xs opacity-80">Visible to all students on the platform.</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPublic(false)}
+                    className={`flex-1 p-3 rounded-lg border-2 text-left transition-all ${
+                      !isPublic 
+                        ? 'border-purple-600 bg-purple-50 text-purple-900' 
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    <p className="font-bold text-sm">Private Task</p>
+                    <p className="text-xs opacity-80">Only visible to your mentored students.</p>
+                  </button>
+                </div>
+              </div>
+
+              {!isPublic && rooms.length > 0 && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                  <Label htmlFor="roomSelection">Assign to Mentorship Room (Optional)</Label>
+                  <select
+                    id="roomSelection"
+                    value={selectedRoomId}
+                    onChange={(e) => setSelectedRoomId(e.target.value)}
+                    className="w-full px-3 py-2 border border-input rounded-md text-sm"
+                  >
+                    <option value="">All my Mentees</option>
+                    {rooms.map((room) => (
+                      <option key={room.id} value={room.id}>
+                        {room.title}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-500 italic">Select a specific room to restrict this task further, or leave as "All my Mentees".</p>
+                </div>
+              )}
 
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded">
