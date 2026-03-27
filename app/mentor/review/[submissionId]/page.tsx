@@ -20,6 +20,7 @@ export default function ReviewSubmission() {
   const [task, setTask] = useState<any>(null)
   const [feedback, setFeedback] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [blockchainStatus, setBlockchainStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [user, setUser] = useState<any>(null)
 
@@ -82,15 +83,31 @@ export default function ReviewSubmission() {
   const handleApprove = async () => {
     setIsLoading(true)
     setError(null)
+    setBlockchainStatus('Initializing blockchain transaction...')
 
     try {
-      const supabase = createClient()
-      
-      // Generate blockchain hash
-      const blockchainHash = generateBlockchainHash(
-        `${submission.id}-${submission.student_id}-${submission.task_id}`
-      )
+      // 1. Trigger Blockchain Verification via API
+      const bcResponse = await fetch('/api/blockchain/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          submissionId: submission.id,
+          studentId: submission.student_id,
+          taskId: submission.task_id,
+          ipfsHash: submission.ipfs_hash
+        })
+      });
 
+      const bcData = await bcResponse.json();
+
+      if (!bcResponse.ok) {
+        throw new Error(bcData.error || 'Blockchain verification failed');
+      }
+
+      setBlockchainStatus('Transaction confirmed! Updating database...');
+
+      // 2. Update Database with the REAL Transaction Hash
+      const supabase = createClient()
       const { error: updateError } = await supabase
         .from('submissions')
         .update({
@@ -98,18 +115,22 @@ export default function ReviewSubmission() {
           approved_at: new Date().toISOString(),
           approved_by: user.id,
           feedback: feedback,
-          blockchain_hash: blockchainHash,
+          blockchain_hash: bcData.transactionHash,
+          smart_contract_tx_hash: bcData.transactionHash
         })
         .eq('id', submissionId)
 
       if (updateError) throw updateError
 
+      setBlockchainStatus('Success! Redirecting...');
+
       // Redirect back to mentor dashboard
       setTimeout(() => {
         router.push('/mentor')
       }, 1500)
-    } catch (err) {
+    } catch (err: any) {
       setError(err instanceof Error ? err.message : 'Failed to approve submission')
+      setBlockchainStatus(null)
     } finally {
       setIsLoading(false)
     }
@@ -258,13 +279,13 @@ export default function ReviewSubmission() {
                 )}
 
                 <div className="flex gap-4">
-                  <Button
-                    onClick={handleApprove}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Processing...' : '✓ Approve & Verify'}
-                  </Button>
+                    <Button
+                      onClick={handleApprove}
+                      className="flex-1 bg-green-600 hover:bg-green-700"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (blockchainStatus || 'Processing...') : '✓ Approve & Verify On-Chain'}
+                    </Button>
                   <Button
                     onClick={handleReject}
                     variant="outline"

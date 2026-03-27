@@ -217,12 +217,19 @@ export default async function MentorDashboard() {
                       <div>
                         <CardTitle className="text-md">{mentee.full_name}</CardTitle>
                         <CardDescription className="text-xs truncate">{mentee.email}</CardDescription>
+                        <div className="flex gap-2">
+                          <Link href={`/profile/${mentee.id}`}>
+                            <Button variant="outline" size="sm" className="h-8 border-slate-200 text-slate-600 hover:bg-slate-50 font-bold px-3">
+                              View Profile
+                            </Button>
+                          </Link>
+                          <Link href={`/recruiter/${mentee.id}`} target="_blank">
+                             <Button variant="ghost" size="sm" className="h-8 text-blue-600 hover:bg-blue-50 font-bold px-3 flex items-center gap-1.5 border border-transparent hover:border-blue-100">
+                                <ExternalLink className="w-3.5 h-3.5" /> Recruiter View
+                             </Button>
+                          </Link>
+                        </div>
                       </div>
-                      <Link href={`/profile/${mentee.id}`}>
-                        <Button variant="ghost" size="sm" className="h-8 px-2 text-blue-600">
-                          <ExternalLink className="w-4 h-4" />
-                        </Button>
-                      </Link>
                     </div>
                   </CardHeader>
                   <CardContent>

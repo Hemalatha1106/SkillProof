@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle, Github, Linkedin, Briefcase, Award, ExternalLink, Clock, Globe, Mail, MapPin, Star, Trophy } from 'lucide-react'
 import { UserNav } from '@/components/user-nav'
@@ -15,7 +16,7 @@ export default async function PublicProfilePage({
   const { userId } = await params
   const supabase = await createClient()
 
-  // Fetch target profile
+  // 1. Fetch target profile
   const { data: profile } = await supabase
     .from('student_profiles')
     .select('*')
@@ -26,34 +27,41 @@ export default async function PublicProfilePage({
     notFound()
   }
 
-  // Fetch viewer info (to show UserNav if logged in)
+  // 2. Fetch submissions (Flat query for maximum RLS compatibility)
+  const { data: submissions, error: subError } = await supabase
+    .from('submissions')
+    .select('*')
+    .eq('student_id', userId)
+    .ilike('status', 'approved')
+    .order('submitted_at', { ascending: false })
+
+  // 3. Fetch tasks separately (to avoid Join RLS issues)
+  const taskIds = submissions?.map(s => s.task_id) || []
+  const { data: tasks } = taskIds.length > 0 
+    ? await supabase.from('tasks').select('*').in('id', taskIds)
+    : { data: [] }
+
+  // 4. Map them together
+  const portfolio = submissions?.map(sub => ({
+    ...sub,
+    task: tasks?.find(t => t.id === sub.task_id)
+  })).filter(item => item.task) || []
+
+  // 5. Fetch viewer info
   const { data: { user: viewer } } = await supabase.auth.getUser()
   let viewerProfile = null
   if (viewer) {
-    const { data: profileData } = await supabase
-      .from('student_profiles')
-      .select('*')
-      .eq('id', viewer.id)
-      .maybeSingle()
-    viewerProfile = profileData
+    const { data: vProfile } = await supabase.from('student_profiles').select('*').eq('id', viewer.id).maybeSingle()
+    viewerProfile = vProfile
   }
 
-  // Fetch GitHub Data
+  // 6. GitHub Data
   const githubUsername = extractUsername(profile.github_url || '')
   const githubStats = githubUsername ? await getGitHubStats(githubUsername) : null
   const githubRepos = githubUsername ? await getGitHubRepos(githubUsername) : []
 
-  // Fetch approved submissions for portfolio
-  const { data: portfolio } = await supabase
-    .from('submissions')
-    .select('*, task_id(title, category, difficulty_level)')
-    .eq('student_id', userId)
-    .eq('status', 'approved')
-    .order('approved_at', { ascending: false })
-
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
           <Link href="/" className="text-xl font-bold text-slate-900">SkillProof</Link>
@@ -65,7 +73,6 @@ export default async function PublicProfilePage({
 
       <main className="max-w-5xl mx-auto px-6 py-12">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Left Column: Profile Card */}
           <div className="md:col-span-1 space-y-6">
             <Card className="overflow-hidden border-none shadow-lg">
               <div className="h-24 bg-gradient-to-r from-blue-600 to-indigo-700" />
@@ -90,12 +97,19 @@ export default async function PublicProfilePage({
                 </div>
 
                 <div className="space-y-3 pt-6 border-t border-slate-100 text-left">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500 text-sm">Credibility</span>
-                    <span className="text-blue-600 font-bold">{profile.credibility_score || 0}</span>
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-slate-500 text-sm">Credibility Score</span>
+                    <span className="text-blue-600 font-extrabold text-lg">{profile.credibility_score || 0}</span>
                   </div>
+                  
+                  <Link href={`/verify/${userId}`} className="w-full block">
+                    <Button className="w-full bg-green-600 hover:bg-green-700 text-white font-bold gap-2 shadow-md shadow-green-100 border-none">
+                      <CheckCircle className="w-4 h-4" /> Blockchain Verification
+                    </Button>
+                  </Link>
+
                   {profile.role === 'mentor' && (
-                    <div className="flex justify-between items-start gap-2 pt-2">
+                    <div className="flex justify-between items-start gap-2 pt-4 border-t border-slate-50 mt-4">
                        <Briefcase className="w-4 h-4 text-slate-400 mt-0.5" />
                        <div className="flex-1">
                           <p className="text-xs font-bold leading-tight">{profile.position}</p>
@@ -106,25 +120,12 @@ export default async function PublicProfilePage({
                 </div>
               </CardContent>
             </Card>
-
-            {profile.role === 'mentor' && profile.experience && (
-               <Card className="border-none shadow-md">
-                 <CardHeader className="pb-2">
-                   <CardTitle className="text-sm font-bold flex items-center gap-2"><Award className="w-4 h-4 text-blue-600"/> Experience</CardTitle>
-                 </CardHeader>
-                 <CardContent>
-                   <p className="text-sm text-slate-600 whitespace-pre-wrap">{profile.experience}</p>
-                 </CardContent>
-               </Card>
-            )}
           </div>
 
-          {/* Right Column: Portfolio/History & GitHub Stats */}
           <div className="md:col-span-2 space-y-8">
-             {/* GitHub Stats Card (Shown for Students with GitHub) */}
              {githubStats && (
               <Card className="border-none bg-slate-900 text-white overflow-hidden relative shadow-xl">
-                <div className="absolute top-0 right-0 p-6 opacity-10">
+                <div className="absolute top-0 right-0 p-6 opacity-10 font-sans">
                   <Github className="w-16 h-16" />
                 </div>
                 <CardHeader className="pb-2">
@@ -145,33 +146,11 @@ export default async function PublicProfilePage({
                       <p className="text-xs text-slate-400 uppercase">Followers</p>
                     </div>
                     <div className="flex items-end">
-                      <a 
-                        href={`https://github.com/${githubStats.username}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
-                      >
+                      <a href={`https://github.com/${githubStats.username}`} target="_blank" className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
                         View Profile <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
                   </div>
-
-                  {githubRepos.length > 0 && (
-                    <div className="mt-6 pt-6 border-t border-slate-800">
-                      <p className="text-[10px] font-bold text-slate-500 mb-3 uppercase tracking-wider">Pinned & Recent Projects</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {githubRepos.slice(0, 4).map(repo => (
-                          <a key={repo.id} href={repo.url} target="_blank" rel="noopener noreferrer" className="bg-slate-800/50 p-3 rounded border border-slate-700 hover:border-blue-500 transition-colors flex justify-between items-center group">
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold truncate group-hover:text-blue-400">{repo.name}</p>
-                              <p className="text-[10px] text-slate-500">{repo.language || 'Project'}</p>
-                            </div>
-                            <Star className="w-3 h-3 text-slate-600 group-hover:text-yellow-500" />
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             )}
@@ -179,10 +158,10 @@ export default async function PublicProfilePage({
             <section>
               <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
                 <CheckCircle className="w-6 h-6 text-green-500" />
-                Verified Portfolio ({portfolio?.length || 0})
+                Verified Portfolio ({portfolio.length})
               </h2>
 
-              {portfolio && portfolio.length > 0 ? (
+              {portfolio.length > 0 ? (
                 <div className="grid gap-4">
                   {portfolio.map((item: any) => (
                     <Card key={item.id} className="hover:border-blue-200 transition-colors group">
@@ -190,14 +169,21 @@ export default async function PublicProfilePage({
                         <div className="flex justify-between items-start">
                            <div>
                              <div className="flex items-center gap-2 mb-1">
-                               <Badge variant="outline" className="text-[10px] uppercase font-bold text-blue-600 border-blue-100">{item.task_id?.category}</Badge>
+                               <Badge variant="outline" className="text-[10px] uppercase font-bold text-blue-600 border-blue-100">{item.task?.category || 'General'}</Badge>
                                <span className="text-[10px] text-slate-400">•</span>
-                               <span className="text-[10px] text-slate-400 font-medium">{new Date(item.approved_at).toLocaleDateString()}</span>
+                               <span className="text-[10px] text-slate-400 font-medium">{new Date(item.submitted_at).toLocaleDateString()}</span>
                              </div>
-                             <CardTitle className="text-lg group-hover:text-blue-600 transition-colors">{item.task_id?.title}</CardTitle>
+                             <CardTitle className="text-lg group-hover:text-blue-600 transition-colors">{item.task?.title}</CardTitle>
                            </div>
-                           <div className="flex items-center gap-1 text-[10px] font-bold text-purple-600 uppercase tracking-tighter bg-purple-50 px-2 py-0.5 rounded border border-purple-100 shadow-sm">
-                             <Trophy className="w-2.5 h-2.5" /> Verified
+                           <div className="flex flex-col items-end gap-1">
+                             <div className="flex items-center gap-1 text-[10px] font-bold text-purple-600 uppercase tracking-tighter bg-purple-50 px-2 py-0.5 rounded border border-purple-100 shadow-sm">
+                               <Trophy className="w-2.5 h-2.5" /> Verified
+                             </div>
+                             {(item.smart_contract_tx_hash || item.blockchain_hash) && (
+                               <span className="text-[8px] font-mono text-slate-300">
+                                 { (item.smart_contract_tx_hash || item.blockchain_hash).slice(0, 10) }...
+                               </span>
+                             )}
                            </div>
                         </div>
                       </CardHeader>
@@ -205,11 +191,7 @@ export default async function PublicProfilePage({
                         <p className="text-sm text-slate-600 line-clamp-2 mb-4 italic">{item.submission_text}</p>
                         <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
                            {item.ipfs_hash && (
-                             <a 
-                               href={`https://gateway.pinata.cloud/ipfs/${item.ipfs_hash}`} 
-                               target="_blank" 
-                               className="text-xs text-blue-600 hover:underline font-bold flex items-center gap-1"
-                             >
+                             <a href={`https://gateway.pinata.cloud/ipfs/${item.ipfs_hash}`} target="_blank" className="text-xs text-blue-600 hover:underline font-bold flex items-center gap-1">
                                <ExternalLink className="w-3 h-3" /> View Proof of Work
                              </a>
                            )}
@@ -220,7 +202,7 @@ export default async function PublicProfilePage({
                 </div>
               ) : (
                 <Card className="bg-slate-100 border-none py-12 text-center text-slate-500 italic">
-                  <p>No verified work items to show yet.</p>
+                  <p>No verified work items found for this record.</p>
                 </Card>
               )}
             </section>

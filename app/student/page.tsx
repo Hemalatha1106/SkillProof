@@ -36,14 +36,18 @@ export default async function StudentDashboard() {
   const mentor = mentorship?.mentor_id as any
   const room = mentorship?.room_id as any
 
-  // Fetch available tasks
-  let tasksQuery = supabase
-    .from('tasks')
-    .select('*')
-    .or(`is_public.eq.true${mentor?.id ? `,creator_id.eq.${mentor.id}` : ''}`)
-    .order('created_at', { ascending: false })
+  // Fetch available tasks (ONLY if student has a mentor/room)
+  let tasks: any[] = []
+  if (mentorship) {
+    let tasksQuery = supabase
+      .from('tasks')
+      .select('*')
+      .or(`is_public.eq.true${mentor?.id ? `,creator_id.eq.${mentor.id}` : ''}${room?.id ? `,room_id.eq.${room.id}` : ''}`)
+      .order('created_at', { ascending: false })
 
-  const { data: tasks } = await tasksQuery
+    const { data: fetchedTasks } = await tasksQuery
+    tasks = fetchedTasks || []
+  }
 
   // Fetch GitHub Data
   const githubUsername = extractUsername(profile?.github_url || '')
@@ -96,7 +100,12 @@ export default async function StudentDashboard() {
             </h1>
             <p className="text-slate-600 mt-1">Welcome back, {profile?.full_name || user.email}</p>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
+            <Link href={`/recruiter/${user.id}`} target="_blank">
+               <Button variant="outline" className="h-9 border-blue-200 text-blue-600 hover:bg-blue-50 font-bold px-4 flex items-center gap-2">
+                  <ExternalLink className="w-4 h-4" /> Share Recruiter Link
+               </Button>
+            </Link>
             <UserNav user={user} profile={profile!} />
           </div>
         </div>
@@ -314,47 +323,49 @@ export default async function StudentDashboard() {
           </div>
         )}
 
-        {/* Available Tasks */}
-        <div className="mb-12">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-slate-900">Available Tasks</h2>
-          </div>
-          
-          {tasks && tasks.length > 0 ? (
-            <div className="grid md:grid-cols-2 gap-6">
-              {tasks.map((task: any) => (
-                <Card key={task.id} className="hover:shadow-lg transition-shadow">
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-lg">{task.title}</CardTitle>
-                        <CardDescription className="mt-2">{task.description}</CardDescription>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        task.difficulty_level === 'beginner' ? 'bg-green-100 text-green-800' :
-                        task.difficulty_level === 'intermediate' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {task.difficulty_level}
-                      </span>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <Link href={`/student/submit/${task.id}`}>
-                      <Button className="w-full bg-blue-600 hover:bg-blue-700">Submit Solution</Button>
-                    </Link>
-                  </CardContent>
-                </Card>
-              ))}
+        {/* Available Tasks (Only visible if mentorship exists) */}
+        {mentorship && (
+          <div className="mb-12">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-slate-900">Available Tasks</h2>
             </div>
-          ) : (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <p className="text-slate-600">No tasks available yet. Check back soon!</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+            
+            {tasks && tasks.length > 0 ? (
+              <div className="grid md:grid-cols-2 gap-6">
+                {tasks.map((task: any) => (
+                  <Card key={task.id} className="hover:shadow-lg transition-shadow">
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle className="text-lg">{task.title}</CardTitle>
+                          <CardDescription className="mt-2">{task.description}</CardDescription>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                          task.difficulty_level === 'beginner' ? 'bg-green-100 text-green-800' :
+                          task.difficulty_level === 'intermediate' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {task.difficulty_level}
+                        </span>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <Link href={`/student/submit/${task.id}`}>
+                        <Button className="w-full bg-blue-600 hover:bg-blue-700 font-bold">Submit Solution</Button>
+                      </Link>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <Card className="bg-slate-50 border-dashed">
+                <CardContent className="py-12 text-center">
+                  <p className="text-slate-500 italic">No tasks assigned to your room yet. Check back soon!</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
 
         {/* My Submissions */}
         <div>
